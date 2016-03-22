@@ -25,14 +25,14 @@ shift 2
 #
 (
   [ -x bin/proot ] && exit
-  set -xe
+  set -e
   mkdir -p bin
   cd proot/src
   make
   ln -f proot ../../bin
 ) || exit 1
 
-
+export PATH=$PATH:$scriptdir/bin
 if [ ! -d "$root" ] ; then
  mkdir -p "$root" || exit 1
 fi
