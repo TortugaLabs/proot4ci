@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# Set-up a centos chroot
+#
+set -x
+scriptdir=$(dirname $(readlink -f $0))
+url=https://github.com/TortugaLabs/proot4ci/releases/download/binaries/centos-7.2.1511-rootfs.tar.xz
+fatal() {
+  echo "$@" 1>&2
+  exit 1
+}
+
+root="$1" ; [ -z "$root" ] && fatal "No rootdir specified"
+[ ! -d $root ] && fatal "$root: does not exist"
+
+wget -O- -nv $url | tar -C $root -Jxf -
+# bin/proot -S <root> [cmd]

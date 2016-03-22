@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# chroot set-up
+#
+scriptdir=$(dirname $(readlink -f $0))
+fatal() {
+  echo "$@" 1>&2
+  exit 1
+}
+usage() {
+  cat 2>&1 <<-EOF
+	Usage: $0 <template> <root> [opt args]
+	EOF
+  exit 1
+}
+
+template="$1" ; [ -z "$template" ] && usage
+root="$2" ; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
+shift 2
+
+[ ! -x "$scriptdir/$template/installer" ] && fatal "$template: Invalid template"
+
+#
+# Build proot
+#
+(
+  [ -x bin/proot ] && exit
+  set -xe
+  mkdir -p bin
+  cd proot/src
+  make
+  ln -f proot ../../bin
+) || exit 1
+
+
+if [ ! -d "$root" ] ; then
+ mkdir -p "$root" || exit 1
+fi
+
+exec "$scriptdir/$template/installer" "$root" "$@"

@@ -2,19 +2,12 @@
 language: c
 compiler: gcc
 script:
-- type fakeroot
-- type rpm
-- type fakechroot
-- type yum
-- type rpmbuild
+- type wget
 
 install:
-- true
+- ./setup centos centos-7.2-x86_64
 
 addons:
   apt:
     packages:
-      - rpm
-      - fakechroot
-      - yum
-
+      - libtalloc-dev
