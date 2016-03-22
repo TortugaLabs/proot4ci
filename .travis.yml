@@ -3,6 +3,7 @@ language: c
 compiler: gcc
 script:
 - type fakeroot
+- type rpm
 - type fakechroot
 
 install:
@@ -12,3 +13,5 @@ addons:
   apt:
     packages:
       - rpm
+      - fakechroot
+
