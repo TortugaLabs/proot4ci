@@ -1,0 +1,12 @@
+#
+language: c
+script:
+- true
+compiler: gcc
+
+
+
+addons:
+  apt:
+    packages:
+      - rpm
