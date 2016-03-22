@@ -6,7 +6,6 @@ script:
 - type rpm
 - type fakechroot
 - type yum
-- type mock
 - type rpmbuild
 
 install:
@@ -18,5 +17,4 @@ addons:
       - rpm
       - fakechroot
       - yum
-      - mock
 
