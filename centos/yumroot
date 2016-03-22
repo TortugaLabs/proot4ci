@@ -1,0 +1,551 @@
+#!/bin/sh
+#
+#   yumroot
+#   Copyright (C) 2007 Alejandro Liu Ly
+#
+#   yumroot is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as
+#   published by the Free Software Foundation; either version 2 of 
+#   the License, or (at your option) any later version.
+#
+#   yumroot is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public
+#   License along with this program.  If not, see 
+#   <http://www.gnu.org/licenses/>
+#
+#++
+# NAME
+#    yumroot 8
+# SUMMARY
+#    use yum to prepare root images
+# SYNOPSIS
+#    *yumroot* *subcmd* _[options]_
+# DESCRIPTION
+#    *yumroot* is a simple wrapper around the *yum(8)* _installroot_
+#    functionality.  Will do the right things to allow you to install
+#    a set of packages to a chrooted directory.
+# SUBCOMMANDS
+#    * *basepkgs*
+#      Returns the minimal basepkg set.
+#    * *mkroot* _dstdir_
+#      Prepare a directory for *yumroot* operation.  You need to do this
+#      before issuing any of the next commands.
+#      _dstdir_ is the directory that will be used later as the chrooted
+#      environment.
+#    * *run* _[--selinux]_ _[--repo_ _repo-url]_ _rootdir_  _[yum_ _options]_
+#      Run *yum(8)* with _rootdir_ as *--installroot* value.  The
+#      option _--selinux_ is required if the target root is meant to
+#      run with selinux security controls.
+#      By default it uses the system configured repo.  You may use
+#      *--repo* option to use the specified repo URL.  This makes it so
+#      that all the system configured repos to be ignored.
+#    * *sh* _[--selinux]_ _rootdir_ _cmd_ _[cmd_ _options]_
+#      Run the given command under the chrooted environment.  The
+#      option _--selinux_ is required if the target root is meant to
+#      run with selinux security controls.
+#    * *post* _[--password_ _pwd]_ _[--hostname_ _name]_ _dir_
+#       Does post processing tasks need to get a mostly working system.
+#    * *cleanup* _dir_
+#      Cleans-up the directory created by *mkroot*
+#    * *help*
+#      On-line usage information
+# AUTHOR
+#    Alejandro Liu Ly
+# SEE ALSO
+#    *yum(8),*
+#    *chroot(1),*
+#--
+
+export PATH=$PATH:/usr/sbin:/sbin
+
+#+
+op_basepkgs() {
+  #    Show the recomended base pkgs
+  # USAGE
+  #    basepkgs
+  # DESCR
+  #    Show the recommended base pkgs to create a very bare bone rootfs
+  #-
+  echo bash grep passwd yum
+}
+
+#+
+op_mkroot() (
+  #    Initialise a chroot environment
+  # USAGE
+  #    mkroot [--no-dyndev|-D] DSTDIR
+  # DESCR
+  #    This will set-up the minimum set of files needed
+  #    to succesfully run yum --installroot
+  #-
+  local DYNDEV=yes
+  while [ $# -gt 0 ]
+  do
+    case "$1" in
+      --dyndev|-d)
+	DYNDEV=yes
+	;;
+      --no-dyndev|-D)
+	DYNDEV=no
+	;;
+      *)
+	break
+    esac
+    shift
+  done
+
+  local DSTDIR="$1"
+  [ -z "$DSTDIR" ] && fatal "No DSTDIR"
+  [ -d "$DSTDIR" ] && fatal "$DSTDIR already exists"
+  mkdir $DSTDIR || fatal "Could not create $DSTDIR"
+  DSTDIR=$(cd $DSTDIR && pwd)
+
+  local n
+  set -e
+  for n in dev dev/mapper dev/shm proc sys selinux etc var/lib/yum var/lib/rpm
+  do
+    mkdir -p $DSTDIR/$n
+  done
+
+  if [ $DYNDEV = no ] ; then
+    mknod -m 666 $DSTDIR/dev/null	c 1 3
+    mknod -m 666 $DSTDIR/dev/zero c 1 5
+    mknod -m 666 $DSTDIR/dev/full c 1 7
+    mknod -m 644 $DSTDIR/dev/random c 1 8
+    mknod -m 644 $DSTDIR/dev/urandom c 1 9
+
+    for n in $(seq 0 9)
+    do
+      mknod -m 644 $DSTDIR/dev/tty$n c 4 $n
+    done
+
+    mknod -m 666 $DSTDIR/dev/tty c 5 0
+    mknod -m 600 $DSTDIR/dev/console c 5 1
+    mknod -m 666 $DSTDIR/dev/ptmx c 5 2
+
+    mknod -m 600 $DSTDIR/dev/mapper/control c 10 62
+    for n in $(seq 0 8)
+    do
+      mknod -m 640 $DSTDIR/dev/loop$n b 7 $n
+    done
+
+    ln -s ../proc/self/fd $DSTDIR/dev/fd
+    ln -s ../proc/self/fd/0 $DSTDIR/dev/stdin
+    ln -s ../proc/self/fd/1 $DSTDIR/dev/stdout
+    ln -s ../proc/self/fd/2 $DSTDIR/dev/stderr
+  fi
+)
+
+#+
+op_cleanup() {
+  #    Clean-up a yumroot environment
+  # USAGE
+  #    cleanup DIR
+  #-
+  local DIR="$1"
+  [ -z "$DIR" ] && fatal "No DIR"
+  [ ! -d "$DIR" ] && fatal "$DIR does not exist"
+  [ "$DIR" = "/" ] && fatal "Suicide not allowed!"
+
+  # Just in case...
+  (
+    umount $DIR/proc
+    umount $DIR/sys
+    umount $DIR/selinux
+    umount $DIR/dev
+  ) >/dev/null 2>&1
+
+  rm -rf "$DIR"
+  exit 0
+}
+
+
+
+#+
+op_sh() {
+  #    Run a chroot shell
+  # USAGE
+  #    sh [--selinux] [--no-dyndev|-D] ROOTDIR [command]
+  #-
+  local SELINUX=no
+  local DYNDEV=yes
+
+  while [ $# -gt 0 ]
+  do
+    case "$1" in
+      --dyndev|-d)
+	DYNDEV=yes
+	;;
+      --no-dyndev|-D)
+	DYNDEV=no
+	;;
+      --selinux)
+	SELINUX=yes
+	;;
+      *)
+	break
+	;;
+    esac
+    shift
+  done
+
+  local ROOTDIR="$1"
+  shift
+
+  [ -z "$ROOTDIR" ] && fatal "No ROOTDIR"
+  [ ! -d "$ROOTDIR" ] && fatal "$ROOTDIR not found"
+
+  mount -t proc proc $ROOTDIR/proc
+  mount -t sysfs sysfs $ROOTDIR/sys
+  [ $DYNDEV = yes ] && mount --bind /dev $ROOTDIR/dev
+  [ $SELINUX = yes ] && mount -t selinuxfs sefs $ROOTDIR/selinux
+
+  trap "
+	umount $ROOTDIR/sys ;
+	umount $ROOTDIR/proc ;
+	[ $SELINUX = yes ] && umount $ROOTDIR/selinux ;
+	[ $DYNDEV = "yes" ] && umount $ROOTDIR/dev" EXIT
+
+  if [ $# -eq 0 ] ; then
+    set /bin/bash -il
+  fi
+  chroot $ROOTDIR "$@"
+}
+
+#+
+op_run() (
+  #    Runs yum with --installroot
+  # USAGE
+  #    run [--selinux] [--no-dyndev|-D] [--repo=REPOURL] ROOTDIR [options]
+  # DESCR
+  #    Does all the preparation (and clean-up) needed when running
+  #    yum with --installroot
+  #
+  #    Useful YUM options: -y (assume yes) and -d 1 (don't talk too much).
+  #    --exclude ="*.i[56]86" to create a system compatible with i486.
+  #-
+  local SELINUX=no
+  local REPO_PATH=()
+  local DYNDEV=yes
+
+  while [ $# -gt 0 ]
+  do
+    case "$1" in
+      --dyndev|-d)
+	DYNDEV=yes
+	;;
+      --no-dyndev|-D)
+	DYNDEV=no
+	;;
+      --selinux)
+	SELINUX=yes
+	;;
+      --repo=*)
+	local repo_url="${1#--repo=}"
+
+	[ -z "$repo_url" ] && fatal "No repo specified for --repo"
+	[ -d "$repo_url" -a -f "$repo_url/repodata/repomd.xml" ] \
+	  && repo_url="file://$(cd $repo_url && pwd)"
+
+	if [ x"`expr substr \"$repo_url\" 1 5`" = x"http:" -o \
+	  x"`expr substr \"$repo_url\" 1 4`" = x"ftp:" ] ; then
+	  # Network repo
+	  wget -nv -O /dev/null "$repo_url/repodata/repomd.xml" \
+	    || fatal "Invalid repo $repo_url"
+	elif [ x"`expr substr \"$repo_url\" 1 5`" = x"file:" ] ; then
+	  # Local file repo
+	  [ ! -f "`expr substr \"$repo_url\" 8 1024`/repodata/repomd.xml" ] \
+	    && fatal "invalid local repo $repo_url"
+	else
+	  fatal "Unsupported REPO scheme for $repo_url"
+	fi
+
+	REPO_PATH+=( "$repo_url")
+	unset repo_url
+	;;
+      *)
+	break
+	;;
+    esac
+    shift
+  done
+
+  local ROOTDIR="$1"
+  shift
+
+  [ -z "$ROOTDIR" ] && fatal "No ROOTDIR"
+  [ ! -d "$ROOTDIR" ] && fatal "$ROOTDIR not found"
+  ROOTDIR=$(cd $ROOTDIR && pwd)
+
+  # If needed, create a temp config file...
+  set -e
+  if [ ${#REPO_PATH[*]} = 0 ] ; then
+    YUMCONF=""
+    CFGOPTS=()
+  else
+    YUMCONF=$(mktemp)
+    REPONAME=$(basename $YUMCONF)
+    trap "rm -f $YUMCONF" EXIT
+    (
+      count=0
+      echo "[main]"
+
+      for repo_url in "${REPO_PATH[@]}"
+      do
+	cat <<-EOF
+		
+		[$REPONAME.$count]
+		name=$REPONAME.$count
+		enabled=1
+		baseurl=$repo_url
+		EOF
+	count=`expr $count + 1`
+      done
+
+    ) > $YUMCONF
+    CFGOPTS=(
+	-c "$YUMCONF"
+	--disablerepo='*'
+	--enablerepo="$REPONAME".'*'
+    )
+  fi
+
+  mount -t proc proc $ROOTDIR/proc
+  mount -t sysfs sysfs $ROOTDIR/sys
+  [ $SELINUX = yes ] && mount -t selinuxfs sefs $ROOTDIR/selinux
+  [ $DYNDEV = yes ] && mount --bind /dev $ROOTDIR/dev
+
+  trap "
+	umount $ROOTDIR/sys ;
+	umount $ROOTDIR/proc ;
+	[ $SELINUX = yes ] && umount $ROOTDIR/selinux ;
+	[ $DYNDEV = yes ] && umount $ROOTDIR/dev" EXIT
+
+
+  (
+    set -x
+    yum \
+	"${CFGOPTS[@]}" \
+	--nogpgcheck \
+	--installroot=$ROOTDIR \
+	"$@"
+  )
+  RETV=$?
+
+  # make sure that things are still OK...
+  if [ -x $ROOTDIR/bin/rpm ] ; then
+    rm -f $ROOTDIR/var/lib/rpm/__db.[0-9][0-9][0-9]
+    chroot $ROOTDIR bin/rpm --rebuilddb
+  fi
+
+  # Remove caches and other stuff ...
+  rm -rf \
+      $ROOTDIR/var/cache/yum/* \
+      $ROOTDIR/var/lib/yum/transaction* \
+      $ROOTDIR/$ROOTDIR
+
+  exit $RETV
+)
+
+#+
+op_post() {
+  #    Post processing tasks
+  # USAGE
+  #    post [options] ROOTDIR
+  # OPTIONS
+  #   --password pwd
+  #	Set the root password to pwd (otherwise it will prompt for it)
+  #   --hostname hostname
+  #     Hostname to configure, otherwise a random name will be used
+  # DESCR
+  #    Create needed files for a working system.
+  #-
+  local SYSNAME=sys$RANDOM
+  local ROOTPW=""
+
+  while [ $# -gt 0 ]
+  do
+    if [ x"$1" = x"--password"  ] ;then
+      shift
+      ROOTPW=$(openssl passwd -1 -stdin <<<"$1")
+      shift
+    elif [ x"$1" = x"--hostname"  ] ;then
+      shift
+      SYSNAME="$1"
+      shift
+    else
+      break
+    fi
+  done
+
+  local DSTDIR="$1"
+  shift
+  [ -z "$DSTDIR" ] && fatal "No DSTDIR specified"
+
+  [ -z "$ROOTPW" ] &&  ROOTPW=$(openssl passwd -1)
+
+  #
+  # These need to be recreated
+  #
+  cat >$DSTDIR/etc/fstab <<-_EOF_
+	none            /dev/pts        devpts  gid=5,mode=620  0 0
+	none            /dev/shm        tmpfs   defaults        0 0
+	none            /proc           proc    defaults        0 0
+	none            /sys            sysfs   defaults        0 0
+	_EOF_
+
+  mkdir -p $DSTDIR/etc/sysconfig/network-scripts
+
+  cat >$DSTDIR/etc/sysconfig/network <<-EOF
+	NETWORKING=yes
+	NETWORKING_IPV6=no
+	HOSTNAME=$SYSNAME
+	EOF
+
+  cat >$DSTDIR/etc/sysconfig/network-scripts/ifcfg-eth0 <<-EOF
+	DEVICE=eth0
+	BOOTPROTO=dhcp
+	ONBOOT=yes
+	EOF
+  # you need to enable shadow authentication in this installation
+  $0 sh $DSTDIR pwconv
+
+  # Fix the root password
+  sed -i- 's:^root\:[^:]*\::root\:'"$ROOTPW"'\::' $DSTDIR/etc/shadow
+}
+
+
+
+######################################################################
+#
+# LIBRARY
+#
+######################################################################
+
+
+#+
+sh_usage() {
+  #    Display a short text on how to use the tool
+  #-
+  cat 1>&2 <<EOF 
+Usage:
+        `basename $0` {subcommand} [... args]
+
+- Use the help subcommand for a list of available subcommands.
+EOF
+  exit 1
+}
+
+#+
+sh_cmdlookup() {
+  #    Check if the subcommand is valid
+  # USAGE
+  #    sh_cmdlookup SUBCMD [list of prefixes]
+  # DESCR
+  #    Check if the subcommand is valid.   If valid it will
+  #    return the name of the entry function
+  #    otherwise an empty string
+  #-
+  local SUBCMD="$1"
+  shift
+
+  declare -F | (while read X Y ENTRYNAME
+  do
+    if [ x"$ENTRYNAME" = x"op_$SUBCMD" ] ; then
+        echo $ENTRYNAME
+    fi
+  done)
+}
+
+#+
+hlp_findinfo() {
+  #    Locate the source of a function
+  # USAGE
+  #    hlp_findsrc ENTRY
+  # DESCR
+  #    Looks for a function and returns any possible help file description
+  #-
+  ENTRY="$1"
+  sed -n "/^$ENTRY()/,/^[ \t]*#-\$/p" "$0" | sed 's/^[ \t]*#//'
+}
+
+#+
+op_help() {
+  #    Display command help
+  # USAGE
+  #    op_help [sub-command]
+  # DESCR
+  #    By itself it will display the list of available sub-commands
+  # 
+  #    If a sub-command is specified, it will show the usage for that
+  #    command.
+  #-
+  if [ $# -eq 0 ] ; then
+    echo "List of available sub-commands for `basename $0`"
+    echo ''
+    declare -F | grep 'declare -f op_' | sed 's/declare -f op_//' | (
+    while read OP
+    do
+      SUMMARY=`hlp_findinfo op_$OP | (read A; read B ; echo $B)`
+      printf "%-10s\t%s\n" $OP "$SUMMARY"
+    done)
+    echo ''
+    exit
+  fi
+
+  local OP=
+  local ENTRY=
+
+  for OP in "$@"
+  do
+    ENTRY=`sh_cmdlookup $OP`
+    if [ -z $ENTRY ] ; then
+      echo "Unknown subcommand $OP" 1>&2
+      continue
+    fi
+
+    # Let' look for it ...
+    echo " NAME"
+    echo -n "    $OP - "
+    hlp_findinfo $ENTRY | (read A ; read B ; echo $B ; cat )
+  done
+}
+
+#+
+sh_dispatch() {
+  #    Command dispatcher
+  # USAGE
+  #    sh_dispatch [arglist]
+  # DESCR
+  #    Dispatch commands.  Figures out the subcommand,
+  #    making sure it is valid.
+  #-
+  [ $# -eq 0 ] && sh_usage
+  local SUBCMD=`sh_cmdlookup "$1"`
+  if [ -z $SUBCMD ] ; then
+    echo "Invalid sub-command $1" 1>&2
+    op_help
+  fi
+
+  shift
+  $SUBCMD "$@"
+  return $?
+}
+
+#+
+fatal() {
+  #    System encountered a fatal condition
+  #-
+  echo "$@" 1>&2
+  exit 1
+}
+
+
+
+sh_dispatch "$@"
+exit $?
+

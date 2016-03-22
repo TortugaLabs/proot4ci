@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# Create a Centos Root
+#
+fatal() {
+  echo "$@" 1>&2
+  exit 1
+}
+
+root() {
+  if [ $EUID -eq 0 ] ; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+usage() {
+  cat 2>&1 <<-EOF
+	Usage: $0 <root> [release] [arch]"
+
+	- release defaults to 7
+	- arch defaults to x86_64
+	EOF
+  exit 1
+}
+
+scriptdir=$(dirname $(readlink -f $0))
+
+root="$1"; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
+crel="$2"; [ -z "$crel" ] && crel=7
+arch="$3"; [ -z "$arch" ] && arch="x86_64"
+
+[ -d "$root" ] && fatal "$root: already exists"
+
+repos="
+  --repo=http://ow1.localnet/v1/centos-$crel/$crel-os-$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/updates/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/extras/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/epel/$crel/$arch
+"
+
+root $scriptdir/yumroot mkroot "$root"
+root $scriptdir/yumroot run --selinux $repos "$root" install -y bash yum wget
