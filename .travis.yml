@@ -1,8 +1,9 @@
 #
 language: c
-script:
-- true
 compiler: gcc
+script:
+- type fakeroot
+- type fakechroot
 
 install:
 - true
