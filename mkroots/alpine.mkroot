@@ -3,7 +3,7 @@
 # Alpine Linux rootfs options
 #
 [ $# -eq 0 ] && set - alpine-linux-3.3-x86_64.rootfs.tar.xz 3.3 x86_64 2.6.5-r1
-if [ $# -ne 3 ] ; then
+if [ $# -ne 4 ] ; then
   cat 2>&1 <<-EOF
 	Usage: $0 <tarball> [release] [arch] [apktools version]"
 
@@ -29,7 +29,11 @@ op_mkroot() {
     mkdir -p "$root"/.static
     tar -C "$root/.static" -xzf "$root/$apktools"
     rm -f "$root/$apktools"
-    root "$root/.static/sbin/apk.static" \
+    root \
+	env \
+	http_proxy=$http_proxy \
+	https_proxy=$https_proxy \
+	"$root/.static/sbin/apk.static" \
 	-X $mirror/v$rel/main -U --allow-untrusted --root "$root" \
 	--initdb add $pkglist || return 1
 

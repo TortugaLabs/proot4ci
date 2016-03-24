@@ -2,6 +2,7 @@
 #
 # Create a root-fs
 #
+[ -z $EUID ] && EUID=$(id -u)
 fatal() {
   echo "$@" 1>&2
   exit 1
@@ -21,8 +22,7 @@ flavor="$1" ; shift
 scriptdir=$(dirname $(readlink -f $0))
 [ ! -f "$scriptdir/$flavor.mkroot" ] && fatal "$flavor: not known"
 
-. $flavor.mkroot
-
+. $scriptdir/$flavor.mkroot
 tarball="$1"
 
 if [ $EUID -ne 0 ] ; then
