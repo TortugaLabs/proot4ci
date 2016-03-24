@@ -83,6 +83,8 @@ op_mkroot() (
   #    to succesfully run yum --installroot
   #-
   local DYNDEV=yes
+  local OVERWRITE=no
+
   while [ $# -gt 0 ]
   do
     case "$1" in
@@ -92,6 +94,9 @@ op_mkroot() (
       --no-dyndev|-D)
 	DYNDEV=no
 	;;
+      --force|-F)
+	OVERWRITE=yes
+	;;
       *)
 	break
     esac
@@ -100,8 +105,11 @@ op_mkroot() (
 
   local DSTDIR="$1"
   [ -z "$DSTDIR" ] && fatal "No DSTDIR"
-  [ -d "$DSTDIR" ] && fatal "$DSTDIR already exists"
-  mkdir $DSTDIR || fatal "Could not create $DSTDIR"
+  if [ -d "$DSTDIR" ] ;then
+    [ $OVERWRITE = no ] && fatal "$DSTDIR already exists"
+  else
+    mkdir $DSTDIR || fatal "Could not create $DSTDIR"
+  fi
   DSTDIR=$(cd $DSTDIR && pwd)
 
   local n

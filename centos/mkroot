@@ -2,10 +2,32 @@
 #
 # Create a Centos Root
 #
-fatal() {
-  echo "$@" 1>&2
+[ $# -eq 0 ] && set - centos-7.2.1511-x86_64.rootfs.tar.xz 7 x86_64
+if [ $# -ne 3 ] ; then
+  cat 2>&1 <<-EOF
+	Usage: $0 <tarball> [release] [arch]"
+
+	- release defaults to 7
+	- arch defaults to x86_64
+	EOF
   exit 1
-}
+fi
+tarball="$1"
+crel="$2"
+arch="$3"
+repos="
+  --repo=http://ow1.localnet/v1/centos-$crel/$crel-os-$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/updates/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/extras/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/epel/$crel/$arch
+"
+
+if [ $EUID -ne 0 ] ; then
+   echo "Obtaining root permissions"
+   sudo true || exit 1
+fi
+
+scriptdir=$(dirname $(readlink -f $0))
 
 root() {
   if [ $EUID -eq 0 ] ; then
@@ -15,30 +37,30 @@ root() {
   fi
 }
 
-usage() {
-  cat 2>&1 <<-EOF
-	Usage: $0 <root> [release] [arch]"
+root="$(mktemp -d -p "$(dirname $(readlink -f "$tarball"))")"
+if [ $EUID -ne 0 ] ; then
+  (
+    while :
+    do
+      sleep 1
+      sudo -n true
+    done
+  ) &
+  pid=$!
+  trap "kill $pid ; sudo -n rm -rf $root" EXIT
+else
+  trap "rm -rf $root" EXIT
+fi
 
-	- release defaults to 7
-	- arch defaults to x86_64
-	EOF
-  exit 1
-}
-
-scriptdir=$(dirname $(readlink -f $0))
-
-root="$1"; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
-crel="$2"; [ -z "$crel" ] && crel=7
-arch="$3"; [ -z "$arch" ] && arch="x86_64"
-
-[ -d "$root" ] && fatal "$root: already exists"
-
-repos="
-  --repo=http://ow1.localnet/v1/centos-$crel/$crel-os-$arch/ \
-  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/updates/$arch/ \
-  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/extras/$arch/ \
-  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/epel/$crel/$arch
-"
-
-root $scriptdir/yumroot mkroot "$root"
-root $scriptdir/yumroot run --selinux $repos "$root" install -y bash yum wget
+set -e
+root $scriptdir/yumroot mkroot -F "$root"
+root $scriptdir/yumroot run --selinux $repos "$root" install -y bash yum wget epel-release
+root $scriptdir/yumroot run --selinux $repos "$root" groupinstall -y buildsys-build
+(
+  echo "Tidying up..."
+  cd "$root" || exit 1
+  rm -rf dev/* var/lib/yum/repos var/lib/yum/history var/log/*
+)
+root rm -rf "$root"/dev/* "$r
+echo "Packing $tarball"
+root tar -C "$root" -Jcf "$tarball" .
