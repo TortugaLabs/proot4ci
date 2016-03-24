@@ -39,5 +39,14 @@ if [ ! -d "$root" ] ; then
  mkdir -p "$root" || exit 1
 fi
 
-wget -nv -O- $github/$rootfs | tar -C "$root" -Jxf -
+mkdir -p $scriptdir/cache
+if [ ! -f $scriptdir/cache/$rootfs ] ; then
+  echo "Downloading $rootfs" 1>&2
+  wget -nv -O $scriptdir/cache/$rootfs -c $github/$rootfs \
+    || rm -f $scriptdir/cache/$rootfs
+  [ ! -f $scriptdir/cache/$rootfs ] && exit 1
+else
+  echo "Using cached $rootfs" 1>&2
+fi
+tar -C "$root" -Jxf $scriptdir/cache/$rootfs
 op_postcmd
