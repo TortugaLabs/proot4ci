@@ -61,6 +61,6 @@ root $scriptdir/yumroot run --selinux $repos "$root" groupinstall -y buildsys-bu
   cd "$root" || exit 1
   rm -rf dev/* var/lib/yum/repos var/lib/yum/history var/log/*
 )
-root rm -rf "$root"/dev/* "$r
 echo "Packing $tarball"
 root tar -C "$root" -Jcf "$tarball" .
+root chown $(id -u):$(id -g) "$tarball"
