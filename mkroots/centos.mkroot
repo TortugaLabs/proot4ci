@@ -1,0 +1,36 @@
+#!/bin/sh
+#
+# Centos rootfs options
+#
+[ $# -eq 0 ] && set - centos-7.2.1511-x86_64.rootfs.tar.xz 7 x86_64
+if [ $# -ne 3 ] ; then
+  cat 2>&1 <<-EOF
+	Usage: $0 <tarball> [release] [arch]"
+
+	- release defaults to 7
+	- arch defaults to x86_64
+	EOF
+  exit 1
+fi
+
+crel="$2"
+arch="$3"
+repos="
+  --repo=http://ow1.localnet/v1/centos-$crel/$crel-os-$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/updates/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/centos/$crel/extras/$arch/ \
+  --repo=http://ow1.localnet/cgi-bin/rpmgot.cgi/epel/$crel/$arch
+"
+
+op_mkroot() {
+    set -e
+    root $scriptdir/yumroot mkroot -F "$root"
+    root $scriptdir/yumroot run --selinux $repos "$root" install -y bash yum wget epel-release
+    root $scriptdir/yumroot run --selinux $repos "$root" groupinstall -y buildsys-build
+    echo "Tyding up..."
+    root rm -rf \
+	"$root"/dev/* \
+	"$root"/var/lib/yum/repos "$root"/var/lib/yum/history \
+	"$root"/var/log/*
+}
+

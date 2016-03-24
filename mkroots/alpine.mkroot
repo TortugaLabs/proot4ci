@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# Alpine Linux rootfs options
+#
+[ $# -eq 0 ] && set - alpine-linux-3.3-x86_64.rootfs.tar.xz 3.3 x86_64 2.6.5-r1
+if [ $# -ne 3 ] ; then
+  cat 2>&1 <<-EOF
+	Usage: $0 <tarball> [release] [arch] [apktools version]"
+
+	- release defaults to 3.3
+	- arch defaults to x86_64
+	- apktools version defaults to 2.6.5-r1
+	EOF
+  exit 1
+fi
+
+rel="$2"
+arch="$3"
+apktools="apk-tools-static-$4.apk"
+mirror="http://nl.alpinelinux.org/alpine"
+pkglist="alpine-base alpine-sdk"
+
+op_mkroot() {
+    set -e
+    (
+	cd "$root"
+	wget -nv $mirror/v$rel/main/$arch/$apktools
+    ) || return 1
+    mkdir -p "$root"/.static
+    tar -C "$root/.static" -xzf "$root/$apktools"
+    rm -f "$root/$apktools"
+    root "$root/.static/sbin/apk.static" \
+	-X $mirror/v$rel/main -U --allow-untrusted --root "$root" \
+	--initdb add $pkglist || return 1
+
+    # Some post processing things...
+    root rm -rf "$root"/dev/*
+    root mkdir -p "$root"/etc/apk
+    root rm -rf "$root"/.static "$root/$apktools"
+    echo "$mirror/v$rel/main" | root tee "$root"/etc/apk/repositories
+}
+

@@ -17,24 +17,27 @@ usage() {
 template="$1" ; [ -z "$template" ] && usage
 root="$2" ; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
 shift 2
+[ ! -f "$scriptdir/$template.cfg" ] && fatal "$template: Invalid template"
+github="https://github.com/TortugaLabs/proot4ci/releases/download/binaries/"
 
-[ ! -x "$scriptdir/$template/installer" ] && fatal "$template: Invalid template"
+. "$scriptdir/$template.cfg"
 
 #
 # Build proot
 #
 (
-  [ -x bin/proot ] && exit
+  [ -x $scriptdir/bin/proot ] && exit
   set -e
-  mkdir -p bin
-  cd proot/src
+  mkdir -p $scriptdir/bin
+  cd $scriptdir/proot/src || exit 1
   make
   ln -f proot ../../bin
 ) || exit 1
 
-export PATH=$PATH:$scriptdir/bin
+proot=$scriptdir/bin/proot
 if [ ! -d "$root" ] ; then
  mkdir -p "$root" || exit 1
 fi
 
-exec "$scriptdir/$template/installer" "$root" "$@"
+wget -nv -O- $github/$rootfs | tar -C "$root" -Jxf -
+op_postcmd

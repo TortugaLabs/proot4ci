@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# Create a root-fs
+#
+fatal() {
+  echo "$@" 1>&2
+  exit 1
+}
+root() {
+  if [ $EUID -eq 0 ] ; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+[ -z "$1" ] && fatal "Must specified rootfs flavor
+	$0 <flavor> [options]"
+
+flavor="$1" ; shift
+scriptdir=$(dirname $(readlink -f $0))
+[ ! -f "$scriptdir/$flavor.mkroot" ] && fatal "$flavor: not known"
+
+. $flavor.mkroot
+
+tarball="$1"
+
+if [ $EUID -ne 0 ] ; then
+   echo "Obtaining root permissions"
+   sudo true || exit 1
+fi
+
+
+root="$(mktemp -d -p "$(dirname $(readlink -f "$tarball"))")"
+if [ $EUID -ne 0 ] ; then
+  (
+    exec >/dev/null 2>&1
+    while :
+    do
+      sleep 1
+      sudo -n true
+    done
+  ) &
+  pid=$!
+  trap "kill $pid ; sudo -n rm -rf $root" EXIT
+else
+  trap "rm -rf $root" EXIT
+fi
+
+op_mkroot || fatal "op_mkroot error ($flavor)"
+
+echo "Packing $tarball"
+root tar -C "$root" -Jcf "$tarball" .
+root chown $(id -u):$(id -g) "$tarball"
