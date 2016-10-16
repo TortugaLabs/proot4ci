@@ -2,14 +2,19 @@
 #
 # Alpine Linux rootfs options
 #
-[ $# -eq 0 ] && set - alpine-linux-3.3-x86_64.rootfs.tar.xz 3.3 x86_64 2.6.5-r1
+# Defaults...
+alpine_release=3.4
+alpine_arch=x86_64
+alpine_tools=2.6.7-r0
+
+[ $# -eq 0 ] && set - alpine-linux-$alpine_release-$alpine_arch.rootfs.tar.xz $alpine_release $alpine_arch $alpine_tools
 if [ $# -ne 4 ] ; then
   cat 2>&1 <<-EOF
 	Usage: $0 <tarball> [release] [arch] [apktools version]"
 
-	- release defaults to 3.3
-	- arch defaults to x86_64
-	- apktools version defaults to 2.6.5-r1
+	- release defaults to $alpine_release
+	- arch defaults to $alpine_arch
+	- apktools version defaults to $alpine_tools
 	EOF
   exit 1
 fi

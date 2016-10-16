@@ -18,8 +18,8 @@ template="$1" ; [ -z "$template" ] && usage
 root="$2" ; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
 shift 2
 [ ! -f "$scriptdir/$template.cfg" ] && fatal "$template: Invalid template"
-github="https://github.com/TortugaLabs/proot4ci/releases/download/binaries/"
-
+mirror="https://github.com/TortugaLabs/proot4ci/releases/download/binaries/"
+decoder=J
 . "$scriptdir/$template.cfg"
 
 #
@@ -42,11 +42,11 @@ fi
 mkdir -p $scriptdir/cache
 if [ ! -f $scriptdir/cache/$rootfs ] ; then
   echo "Downloading $rootfs" 1>&2
-  wget -nv -O $scriptdir/cache/$rootfs -c $github/$rootfs \
+  wget -nv -O $scriptdir/cache/$rootfs -c $mirror/$rootfs \
     || rm -f $scriptdir/cache/$rootfs
   [ ! -f $scriptdir/cache/$rootfs ] && exit 1
 else
   echo "Using cached $rootfs" 1>&2
 fi
-tar -C "$root" -Jxf $scriptdir/cache/$rootfs
+tar -C "$root" -${decoder}xf $scriptdir/cache/$rootfs
 op_postcmd

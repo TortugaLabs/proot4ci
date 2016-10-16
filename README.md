@@ -34,3 +34,15 @@ addons:
    - libtalloc-dev
 
 ```
+
+## NOTES
+
+- Install libtalloc-dev on CentOS.
+- Run:
+  - setup _flavor_ _rootfs_
+- From then on you can do:
+  - bin/proot -R _rootfs_ _[commands]_
+
+
+
+

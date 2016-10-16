@@ -2,13 +2,17 @@
 #
 # Centos rootfs options
 #
-[ $# -eq 0 ] && set - centos-7.2.1511-x86_64.rootfs.tar.xz 7 x86_64
+centos_release=7
+centos_update=$centos_release.2.1511
+centos_arch=x86_64
+
+[ $# -eq 0 ] && set - centos-$centos_update-$centos_arch.rootfs.tar.xz $centos_release $centos_arch
 if [ $# -ne 3 ] ; then
   cat 2>&1 <<-EOF
 	Usage: $0 <tarball> [release] [arch]"
 
-	- release defaults to 7
-	- arch defaults to x86_64
+	- release defaults to $centos_release
+	- arch defaults to $centos_arch
 	EOF
   exit 1
 fi
