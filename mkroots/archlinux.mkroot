@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# Arch Linux rootfs options
+#
+arch_snapshot=2016.10.01
+arch_arch=x86_64
+
+[ $# -eq 0 ] && set - archlinux-$arch_snapshot-$arch_arch.rootfs.tar.xz $arch_snapshot $arch_arch
+if [ $# -ne 3 ] ; then
+  cat 2>&1 <<-EOF
+	Usage: $0 <tarball> [snapshot] [arch]"
+
+	- snapshot defaults to $arch_snapshot
+	- arch defaults to $arch_arch
+	EOF
+  exit 1
+fi
+
+
+snapshot="$2"
+arch="$3"
+
+mirror=http://mirrors.kernel.org/archlinux/iso/$snapshot
+rootfs="archlinux-bootstrap-$snapshot-$arch.tar.gz"
+
+op_mkroot() {
+    set -e
+    if [ -f $rootfs ] ; then
+      echo "Using $rootfs"
+    else
+      wget $mirror/$rootfs
+    fi
+    
+    echo -n Unpacking..
+    root tar -C "$root" -zxf "$rootfs"
+    echo -n .Fixing..
+    root find "$root" -maxdepth 2 -mindepth 2 -exec mv '{}' "$root" ';'
+    root rmdir "$root/root.$arch"
+    echo .done.
+    
+    # Screw with entropy...
+    echo -n "Init pacman"
+    root mv /dev/random /dev/xrandom
+    root cp -a /dev/urandom /dev/random
+    root "$root/bin/arch-chroot" "$root" pacman-key --init
+    root rm -f /dev/random
+    root mv /dev/xrandom /dev/random
+    root "$root/bin/arch-chroot" "$root" pacman-key --populate archlinux
+
+    root sed -i~ -e 's/^#Server /Server/' "$root/etc/pacman.d/mirrorlist"
+}
+

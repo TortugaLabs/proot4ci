@@ -18,7 +18,7 @@ root() {
 [ -z "$1" ] && fatal "Must specified rootfs flavor
 	$0 <flavor> [options]"
 
-flavor="$1" ; shift
+flavor="$(echo $1 | sed 's/\.mkroot$//')" ; shift
 scriptdir=$(dirname $(readlink -f $0))
 [ ! -f "$scriptdir/$flavor.mkroot" ] && fatal "$flavor: not known"
 

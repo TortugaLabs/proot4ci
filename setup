@@ -15,6 +15,7 @@ usage() {
 }
 
 template="$1" ; [ -z "$template" ] && usage
+template="$(echo $template | sed 's/\.cfg$//')"
 root="$2" ; [ -z "$root" ] && usage ; root=$(readlink -f "$root")
 shift 2
 [ ! -f "$scriptdir/$template.cfg" ] && fatal "$template: Invalid template"
