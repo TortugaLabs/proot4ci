@@ -2,7 +2,7 @@
 #
 # Arch Linux rootfs options
 #
-arch_snapshot=2016.10.01
+arch_snapshot=2016.11.01
 arch_arch=x86_64
 
 [ $# -eq 0 ] && set - archlinux-$arch_snapshot-$arch_arch.rootfs.tar.xz $arch_snapshot $arch_arch
@@ -48,5 +48,10 @@ op_mkroot() {
     root "$root/bin/arch-chroot" "$root" pacman-key --populate archlinux
 
     root sed -i~ -e 's/^#Server /Server/' "$root/etc/pacman.d/mirrorlist"
+    root "$root/bin/arch-chroot" "$root" pacman -Syu --noconfirm
+    root rm -rf \
+		"$root/etc/pacman.d/gnupg/S.gpg-agent" \
+		"$root/var/cache/pacman/pkg"/* \
+		"$root/var/lib/pacman/sync"/*
 }
 

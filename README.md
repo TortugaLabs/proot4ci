@@ -2,18 +2,20 @@
 
 User level chroot/fakeroot for travis-ci
 
-[![Build Status](https://api.travis-ci.org/TortugaLabs/proot4ci.png?branch=master)](https://travis-ci.org/TortugaLabs/proot4ci)
+![Build Status](https://api.travis-ci.org/TortugaLabs/proot4ci.png?branch=master)](https://travis-ci.org/TortugaLabs/proot4ci)
 
 File layout:
 
 - mkroots: scripts to create rootfs files...
   - mkroot : main driver script for creating rootfs tar balls
   - alpine.mkroot : Alpine Linux specifics
+  - archlinux.mkroot : Arch Linux specifics
   - centos.mkroot : centos specifics
   - yumroot : helper tool for centos.mkroot
 - setup: create a rootfs
   - alpine.cfg : Alpine Linux config settings
   - centos.cfg : Centos config settings
+  - archlinux.cfg : Arch Linux specific settings
 
 Usage:
 
